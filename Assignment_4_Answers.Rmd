@@ -1,0 +1,1036 @@
+---
+title: "Assignment-4 Part A & B"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+  word_document: default
+---
+
+
+```{r}
+
+
+
+library(dplyr)
+library(ggplot2)
+library(lmtest)
+library(corrplot)
+library(rpart)
+library(vcd)
+library(tidyverse)
+library(moments)
+
+
+df <- read.csv("D:/Ivey/Stats/mepsData.csv")
+
+dim(df)
+head(df)
+```
+# Pre-prossesing Steps
+
+```{r}
+# Calculating the percentage of null values in each column
+
+Null_Percentage_Calculator <- c("FluVaccination","Age","Sex","RaceEthnicity",
+                                "HealthInsurance","NotAffordHealthCare",
+                                "FamIncome_Continuous","MentalHealth", "FamIncome_Categorical",
+                                "FamIncome_PercentPoverty", "HealthStatus", "HaveProvider", 
+                                "CensusRegion", "TotalHealthExpenditure", "HasHypertension", 
+                                "HasDiabetes", "BMI", "Drinks5Day")
+
+
+Total_Length <- length(df$FluVaccination)
+Percentage_Null_Values <- numeric(length(Null_Percentage_Calculator))
+
+for (Column in Null_Percentage_Calculator){
+  Nullcount <- sum(is.na(df[,Column]))
+  Percentage_Null_Values[Column] <- (Nullcount/Total_Length)*100
+  cat("Percentage of Null Values in", Column, "is:", Percentage_Null_Values[Column], "\n")
+}
+
+```
+
+
+```{r}
+#Re-coding the categorical variables
+
+df$HasHypertension <- ifelse(is.na(df$HasHypertension),"NA", ifelse(df$HasHypertension == 1, "Yes", "No"))
+df$Drinks5Day <- ifelse(is.na(df$Drinks5Day), "NA",ifelse(df$Drinks5Day == 1, "Yes", "No"))
+df$FluVaccination <- ifelse(is.na(df$FluVaccination),"NA", ifelse(df$FluVaccination == 1, "Yes", "No"))
+
+df$BMI <- as.character(df$BMI)
+df$BMI <- ifelse(is.na(df$BMI), "NA", df$BMI)
+
+
+df$Sex <- factor(df$Sex,levels=1:2,labels = c("MALE", "FEMALE"))
+df$RaceEthnicity <- factor(df$RaceEthnicity,levels=1:5,labels = c("HISPANIC","NON-HISPANIC WHITE ONLY","NON-HISPANIC BLACK ONLY","NON-HISPANIC ASIAN ONLY","NON-HISPANIC OTHER RACE OR MULTIPLE RACE"))
+df$CensusRegion <-  factor(df$CensusRegion,levels=1:4,labels = c("NORTHEAST","MIDWEST","SOUTH","WEST"))
+df$HealthStatus <-  factor(df$HealthStatus,levels=1:5,labels = c("EXCELLENT","VERY GOOD","GOOD","FAIR","POOR"))
+df$MentalHealth <-  factor(df$MentalHealth,levels=1:5,labels = c("EXCELLENT","VERY GOOD","GOOD","FAIR","POOR"))
+df$HasDiabetes <- factor(df$HasDiabetes,levels=1:2,labels = c("YES", "NO"))
+df$HealthInsurance <-  factor(df$HealthInsurance,levels=1:3,labels = c("ANY PRIVATE","PUBLIC ONLY","UNINSURED"))
+df$HaveProvider <- factor(df$HaveProvider,levels=1:2,labels = c("YES", "NO"))
+df$NotAffordHealthCare <- factor(df$NotAffordHealthCare,levels=1:2,labels = c("YES", "NO"))
+df$FamIncome_Categorical <- factor(df$FamIncome_Categorical,levels=1:5,labels = c("POOR","NEAR POOR","LOW INCOME","MIDDLE INCOME","HIGH INCOME"))
+
+```
+
+# Question 1
+```{r}
+
+# Calculating the BMI Categories
+
+df$BMI_Categorical <- ifelse(df$BMI < 16,"Underweight-Severe",
+                        ifelse(df$BMI >= 16 & df$BMI <= 16.9,"Underweight-Moderate",
+                          ifelse(df$BMI >= 17 & df$BMI <= 18.4,"Underweight-Mild",
+                            ifelse(df$BMI >= 18.5 & df$BMI <= 24.9,"Normal",
+                              ifelse(df$BMI >= 25 & df$BMI <= 29.9,"Overweight",
+                                ifelse(df$BMI >= 30 & df$BMI <= 34.9,"Obese-I",
+                                  ifelse(df$BMI >= 35 & df$BMI <= 39.9,"Obese-II",
+                                    ifelse(df$BMI == "NA","NA",
+                                      ifelse(df$BMI >=40,"Obese-III","NA")))))))))
+
+head(df)
+```
+
+# Question 2
+
+```{r}
+
+#Calculating Statistics - grouping by BMI
+
+Mean_On_BMI <- aggregate(df$TotalHealthExpenditure ~ df$BMI_Categorical, data=df,FUN = mean)
+Mean_On_BMI
+Median_On_BMI <- aggregate(df$TotalHealthExpenditure ~ df$BMI_Categorical, data=df,FUN = median)
+Median_On_BMI
+Standard_Deviation_On_BMI <- aggregate(df$TotalHealthExpenditure ~ df$BMI_Categorical, data=df,FUN = sd)
+Standard_Deviation_On_BMI
+First_quartile_On_BMI <- aggregate(df$TotalHealthExpenditure ~ df$BMI_Categorical, data=df,FUN = function(x) quantile(x,0.25))
+First_quartile_On_BMI
+Third_quartile_On_BMI <- aggregate(df$TotalHealthExpenditure ~ df$BMI_Categorical, data=df,FUN = function(x) quantile(x,0.75))
+Third_quartile_On_BMI
+
+#Table by BMI
+
+BMI_Table <- data.frame(
+  BMI_Categorical = Mean_On_BMI$`df$BMI_Categorical`,
+  Mean = Mean_On_BMI$`df$TotalHealthExpenditure`,
+  Median = Median_On_BMI$`df$TotalHealthExpenditure`,
+  Standard_Deviation = Standard_Deviation_On_BMI$`df$TotalHealthExpenditure`,
+  First_quartile = First_quartile_On_BMI$`df$TotalHealthExpenditure`,
+  Third_quartile = Third_quartile_On_BMI$`df$TotalHealthExpenditure`
+)
+
+print(BMI_Table)
+
+
+
+#Calculating Statistics - grouping by Income
+
+Mean_On_Income <- aggregate(df$TotalHealthExpenditure ~ df$FamIncome_Categorical, data=df,FUN = mean)
+Mean_On_Income
+Median_On_Income <- aggregate(df$TotalHealthExpenditure ~ df$FamIncome_Categorical, data=df,FUN = median)
+Median_On_Income
+Standard_Deviation_On_Income <- aggregate(df$TotalHealthExpenditure ~ df$FamIncome_Categorical, data=df,FUN = sd)
+Standard_Deviation_On_Income
+First_quartile_On_Income <- aggregate(df$TotalHealthExpenditure ~ df$FamIncome_Categorical, data=df,FUN = function(x) quantile(x,0.25))
+First_quartile_On_Income
+Third_quartile_On_Income <- aggregate(df$TotalHealthExpenditure ~ df$FamIncome_Categorical, data=df,FUN = function(x) quantile(x,0.75))
+Third_quartile_On_Income
+
+#Table by Income
+
+
+Income_Table <- data.frame(
+  Income_Categorical = Mean_On_Income$`df$FamIncome_Categorical`,
+  Mean = Mean_On_Income$`df$TotalHealthExpenditure`,
+  Median = Median_On_Income$`df$TotalHealthExpenditure`,
+  Standard_Deviation = Standard_Deviation_On_Income$`df$TotalHealthExpenditure`,
+  First_quartile = First_quartile_On_Income$`df$TotalHealthExpenditure`,
+  Third_quartile = Third_quartile_On_Income$`df$TotalHealthExpenditure`
+)
+
+print(Income_Table)
+
+
+#Calculating Statistics - grouping by Health Status
+
+Mean_On_HealthStatus <- aggregate(df$TotalHealthExpenditure ~ df$HealthStatus, data=df,FUN = mean)
+Mean_On_HealthStatus
+Median_On_HealthStatus <- aggregate(df$TotalHealthExpenditure ~ df$HealthStatus, data=df,FUN = median)
+Median_On_HealthStatus
+Standard_Deviation_On_HealthStatus <- aggregate(df$TotalHealthExpenditure ~ df$HealthStatus, data=df,FUN = sd)
+Standard_Deviation_On_HealthStatus
+First_quartile_On_HealthStatus <- aggregate(df$TotalHealthExpenditure ~ df$HealthStatus, data=df,FUN = function(x) quantile(x,0.25))
+First_quartile_On_HealthStatus
+Third_quartile_On_HealthStatus <- aggregate(df$TotalHealthExpenditure ~ df$HealthStatus, data=df,FUN = function(x) quantile(x,0.75))
+Third_quartile_On_HealthStatus
+
+#Table by Health Status
+
+
+Health_Status_Table <- data.frame(
+  Health_Status_Categorical = Mean_On_HealthStatus$`df$HealthStatus`,
+  Mean = Mean_On_HealthStatus$`df$TotalHealthExpenditure`,
+  Median = Median_On_HealthStatus$`df$TotalHealthExpenditure`,
+  Standard_Deviation = Standard_Deviation_On_HealthStatus$`df$TotalHealthExpenditure`,
+  First_quartile = First_quartile_On_HealthStatus$`df$TotalHealthExpenditure`,
+  Third_quartile = Third_quartile_On_HealthStatus$`df$TotalHealthExpenditure`
+)
+
+print(Health_Status_Table)
+
+
+
+# Mean by BMI 
+ggplot(BMI_Table, aes(x = BMI_Categorical, y = Mean)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "BMI", y = "Mean Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Median by BMI 
+ggplot(BMI_Table, aes(x = BMI_Categorical, y = Median)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(x = "BMI", y = "Median Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Standard deviation by BMI
+ggplot(BMI_Table, aes(x = BMI_Categorical, y = Standard_Deviation)) +
+  geom_bar(stat = "identity", fill = "yellow") +
+  labs(x = "BMI", y = "Standard Deviation Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# First quartile by BMI 
+ggplot(BMI_Table, aes(x = BMI_Categorical, y = First_quartile)) +
+  geom_bar(stat = "identity", fill = "black") +
+  labs(x = "BMI", y = "First Quartile Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Third quartile by BMI
+ggplot(BMI_Table, aes(x = BMI_Categorical, y = Third_quartile)) +
+  geom_bar(stat = "identity", fill = "brown") +
+  labs(x = "BMI", y = "Third Quartile Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+# Mean by Income
+ggplot(Income_Table, aes(x = Income_Categorical, y = Mean)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Income", y = "Mean Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Median by Income 
+ggplot(Income_Table, aes(x = Income_Categorical, y = Median)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(x = "Income", y = "Median Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Standard deviation by Income
+ggplot(Income_Table, aes(x = Income_Categorical, y = Standard_Deviation)) +
+  geom_bar(stat = "identity", fill = "yellow") +
+  labs(x = "Income", y = "Standard Deviation Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# First quartile by Income 
+ggplot(Income_Table, aes(x = Income_Categorical, y = First_quartile)) +
+  geom_bar(stat = "identity", fill = "black") +
+  labs(x = "Income", y = "First Quartile Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Third quartile by Income
+ggplot(Income_Table, aes(x = Income_Categorical, y = Third_quartile)) +
+  geom_bar(stat = "identity", fill = "brown") +
+  labs(x = "Income", y = "Third Quartile Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+# Mean by Health Status 
+ggplot(Health_Status_Table, aes(x = Health_Status_Categorical, y = Mean)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Health Status", y = "Mean Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Median by Health Status 
+ggplot(Health_Status_Table, aes(x = Health_Status_Categorical, y = Median)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(x = "Health Status", y = "Mean Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Standard deviation by Health Status
+ggplot(Health_Status_Table, aes(x = Health_Status_Categorical, y = Standard_Deviation)) +
+  geom_bar(stat = "identity", fill = "yellow") +
+  labs(x = "Health Status", y = "Mean Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# First quartile by Health Status 
+ggplot(Health_Status_Table, aes(x = Health_Status_Categorical, y = First_quartile)) +
+  geom_bar(stat = "identity", fill = "black") +
+  labs(x = "Health Status", y = "Mean Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Third quartile by Health Status
+ggplot(Health_Status_Table, aes(x = Health_Status_Categorical, y = Third_quartile)) +
+  geom_bar(stat = "identity", fill = "brown") +
+  labs(x = "Health Status", y = "Mean Health Expenditure") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Plotting Box plot for BMI Categorical variable
+
+ggplot(df, aes(x = BMI_Categorical, y = scale(TotalHealthExpenditure), fill = BMI_Categorical)) +
+  geom_boxplot() +
+  labs(x = "BMI Categories", y = "Scaled_TotalHealthExpenditure") +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Plotting Box plot for Income Categorical variable
+
+ggplot(df, aes(x = FamIncome_Categorical, y = scale(TotalHealthExpenditure), fill = FamIncome_Categorical)) +
+  geom_boxplot() +
+  labs(x = "Family Income", y = "Scaled_TotalHealthExpenditure") +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Plotting Box plot for Health Status Categorical variable
+
+ggplot(df, aes(x = HealthStatus, y = scale(TotalHealthExpenditure), fill = HealthStatus)) +
+  geom_boxplot() +
+  labs(x = "Health Status", y = "Scaled_TotalHealthExpenditure") +
+  theme_minimal()
+
+```
+
+This analysis provides insights into how each category in each categorical variable impact’s total health expenditure variable.
+
+From the tables and histograms we can make out that people in the BMI category representing extremes like obesity (Obese-III) or Underweight-severe tend to spend higher on health expenditure than the people under Normal BMI category. Similarly in the case of health status, people having bad heath condition tends to spend more on health expenditure compared to the people having good health status. This information suggests us that these variables could be important variables for our linear regression model.
+
+With the help of standard deviation and quartile’s we could also identify potential outliers within each category of categorical variables. Outliers can significantly affect regression model output.
+
+This analysis can also be used to generate hypothesis like total health expenditure is significantly changes with BMI categories or Income or Health Status or it does not change with these variables.
+
+
+
+# Question 3
+
+```{r}
+
+# PART 1 Hyposthesis Testing between Health Status and Mental Health
+
+ggplot(df, aes(x = HealthStatus)) +
+  geom_bar(position = "dodge")
+
+ggplot(df, aes(x = MentalHealth)) +
+  geom_bar(position = "dodge")
+
+
+ggplot(df, aes(x = HealthStatus, fill = MentalHealth)) +
+  geom_bar(position = "dodge")
+
+
+mosaicplot(table(df$HealthStatus, df$MentalHealth),
+           main = "General Health vs Mental health",
+           xlab = "General Health",
+           ylab = "Mental Health",
+           col = c("blue", "red","green","purple","orange"),
+           border = "black",      
+           border.lwd = 10,
+           labeling_args = list(abbreviate = 5)) 
+
+legend("topleft", legend = c("EXCELLENT","VERY GOOD","GOOD","FAIR","POOR"),
+       fill = c("blue", "red","green","purple","orange"),
+       border= "black")
+
+
+TABLE_HEALTH <- table(df$HealthStatus, df$MentalHealth)
+
+TABLE_HEALTH
+
+
+Test_result <- chisq.test(df$HealthStatus, df$MentalHealth)
+Test_result
+
+
+
+
+
+```
+
+Hypotheses: Is there a relationship between Health Status and Mental Health.
+
+Null Hypothesis: There is no relationship between Health Status and Mental Health.
+
+Analysis: I performed a chi-square test because both the variables are categorical variable.
+
+Interpretation: I have got a very low p value suggests that these 2 variables are not independent of each other.
+
+Help in later regression: The Hypothesis test shows health status and Mental health are related to each other. Including these parameters could improve the linear regression.
+
+
+
+```{r}
+
+# PART 2 Hyposthesis Testing between Hypertension and Health Expenditure
+
+df1 <- df[!(df$HasHypertension == "NA") , ]
+dim(df1)
+head(df1)
+
+
+plot_THE <- ggplot(df1, aes(x = TotalHealthExpenditure)) +
+  geom_histogram(bins = 300, color = "red")
+
+plot_THE  + scale_x_continuous(labels = scales::comma)+  coord_cartesian(xlim = c(0, 100000))
+
+
+
+ggplot(df1, aes(x = HasHypertension)) +
+  geom_bar(position = "dodge")
+
+
+ggplot(data = df1, aes(x = HasHypertension, y = TotalHealthExpenditure)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Hypertension", y = "Medical Expenditure") +
+  ggtitle("Medical Expenditure by Hypertension")
+
+
+
+
+ggplot(df1, aes(x = TotalHealthExpenditure, fill = HasHypertension)) +
+  geom_bar(position = "dodge", width = 5) +
+  scale_x_log10(labels = scales::label_number())
+
+
+
+Test_result_1 <- t.test(TotalHealthExpenditure ~ HasHypertension, data=df1)
+Test_result_1
+
+
+
+
+```
+
+Hypotheses: Medical Expenditure varies by whether the person has high blood pressure.
+
+Null Hypothesis: There is no relationship between Total health expenditure and people who have hypertension.
+
+Analysis: I performed a t-test because one variable is categorical with 2 categories and other is continuous variable.
+
+Interpretation: I have got a very low p value suggests that there is a significant difference between both the variables.
+
+Help in later regression: The Hypothesis test shows Total health expenditure significantly varies with Hashypertension variable. Including this parameter could improve the linear regression.
+
+
+
+
+
+
+
+```{r}
+
+# PART 3 Hyposthesis Testing on Census Region and Health Expenditure 
+
+df1 <- df[!is.na(df$CensusRegion), ]
+
+unique(df1$CensusRegion)
+plot_THE <- ggplot(df1, aes(x = df1$TotalHealthExpenditure)) +
+  geom_histogram(bins = 300, color = "red")
+
+plot_THE  + scale_x_continuous(labels = scales::comma)+  coord_cartesian(xlim = c(0, 100000))
+
+
+ggplot(df1, aes(x = CensusRegion)) +
+  geom_bar(position = "dodge")
+
+
+
+ggplot(data = df1, aes(x = CensusRegion, y = TotalHealthExpenditure)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Region", y = "Medical Expenditure") +
+  ggtitle("Meical Expenditure by Region")
+
+
+
+ggplot(df1, aes(x = TotalHealthExpenditure, fill = CensusRegion)) +
+  geom_bar(position = "dodge", width = 1) +
+  scale_x_log10(labels = scales::label_number())
+
+
+Test_result_2 <- aov(TotalHealthExpenditure ~ CensusRegion, data = df1)
+summary(Test_result_2)
+
+
+
+
+```
+
+Hypotheses: Medical Expenditure varies by CensusRegion.
+
+Null Hypothesis: There is no difference in Total health expenditure across different census regions.
+
+Analysis: I performed a ANOVA test because the categorical variable has 5 categories and the other variable is continuous variable.
+
+Interpretation: I have got a very low p value suggests that there is a significant difference between both the variables.
+
+Help in later regression:The Hypothesis test shows Total health expenditure significantly varies with Census region variable. Including this parameter could improve the linear regression.
+
+
+
+
+```{r}
+
+# PART 4 Hyposthesis Testing between Age and Health Expenditure
+
+df1 <- df[!(df$Age == "NA") , ]
+df1 <- df[!is.na(df$Age), ]
+
+
+
+p <- ggplot(df1, aes(x = df1$TotalHealthExpenditure)) +
+  geom_histogram(bins = 200, color = "red")
+
+p  + scale_x_continuous(labels = scales::comma) +
+  coord_cartesian(xlim = c(0, 100000))
+
+
+ggplot(df1, aes(x = Age)) +
+  geom_bar(position = "dodge")
+
+
+ggplot(data = df1, aes(x = Age, y = TotalHealthExpenditure )) +
+  geom_point() +
+  labs(x = "Age", y = "Medical Expenditure", title = "Medical Expenditure by Age")
+
+correlation_test <- lm(TotalHealthExpenditure ~ Age, data = df1)
+summary(correlation_test)
+
+
+
+
+
+```
+
+Hypotheses: Medical Expenditure varies by Age.
+
+Null Hypothesis: There is no correlation between Total health expenditure and Age.
+
+Analysis: I performed a linear regression because both the variables are continuous.
+
+Interpretation: I have got a very low p value suggest that there is a statistically significant correlation between the two parameters.
+
+Help in later regression: The Hypothesis test shows Total health expenditure significantly varies with Age variable. Including this parameter could improve the linear regression.
+
+
+# Question 4
+
+```{r}
+# PART A
+df1 <- df[!(df$BMI == "NA") , ]
+df2 <- na.omit(df1)
+
+
+
+subset_df <- df2[, c("FamIncome_Continuous", "TotalHealthExpenditure", "BMI","Age")]
+
+sapply(subset_df, class)
+subset_df$BMI <- as.numeric(subset_df$BMI)
+
+
+
+correlation_matrix <- cor(subset_df)
+correlation_matrix
+corrplot(correlation_matrix, method = "color", type = "upper", order = "hclust", tl.cex = 0.7, tl.col = "black", tl.srt = 45)
+
+
+
+```
+
+The correlation matrix shows: The correlation coefficient FamIncome and Health Expenditure is -0.0231. This suggests that family income increases, health expenditure decrease slightly.
+
+The correlation coefficient BMI and Health Expenditure is 0.053. This suggest that health expenditure slightly increase with increase in BMI.
+
+The correlation coefficient Age and Health Expenditure is 0.191. This suggest that  as the person’s age increases the health expenditure slightly increases.
+
+Also, the correlation coefficients of all pairs are small suggesting that these variables are not multicollinear.
+
+
+
+```{r}
+# PART B
+#1
+
+hist(df2$Age)
+
+#2
+
+ggplot(df2, aes(x = Sex)) +
+  geom_bar() +
+  labs(x = "Sex", y = "Frequency", title = "Sex")
+
+#3
+
+hist(subset_df$BMI)
+
+#4
+
+ggplot(df2, aes(x = RaceEthnicity)) +
+  geom_bar() +
+  labs(x = "Ethnicity", y = "Frequency", title = "Ethnicity")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+#5
+
+ggplot(df2, aes(x = MentalHealth)) +
+  geom_bar() +
+  labs(x = "Mental Health", y = "Frequency", title = "Mental Health")
+
+df3 <- df2
+head(df3)
+
+df3$Transformed_TotalHealthExpenditure <- log(df3$TotalHealthExpenditure)
+df3$Transformed_TotalHealthExpenditure[df3$Transformed_TotalHealthExpenditure == -Inf] <- NA
+df3$Transformed_TotalHealthExpenditure[df3$Transformed_TotalHealthExpenditure == +Inf] <- NA
+df3 <- df3[complete.cases(df3$Transformed_TotalHealthExpenditure), ]
+
+
+
+ggplot(df3, aes(x = Transformed_TotalHealthExpenditure)) +
+  geom_bar(width = 0.9) +
+  labs(x = "Transformed Health Expenditure", y = "Frequency", title = "Transformed Health Expenditure")
+
+
+df3$BMI_Categorical <- as.factor(df3$BMI_Categorical)
+
+df3 <- df3[df3$BMI_Categorical != "NA", ]
+
+model <- lm( Transformed_TotalHealthExpenditure ~ Age + Sex + BMI_Categorical + RaceEthnicity + MentalHealth, data = df3)
+summary(model)
+
+
+```
+
+(i). Interpreting the coefficient
+
+Age: The coefficient is 0.0303. For each year addition in the age variable, Total health expenditure variable is expected to increase by 0.0303 units, holding other variables constant.
+
+SexFEMALE: The coefficient is 0.3163. For gender being female is estimated to have 0.3164 units increase in Total health expenditure w.r.t males, keeping other variables constant.
+
+BMI_Categorical: The coefficients for few categories are statistically significant. With obese-I as 0.17, obese-II as 0.32, obese-III as 0.56 and overweight as 0.12 units respectively in Total health expenditure.
+
+Race Ethnicity: In comparison with other categories individuals who identify as non Hispanic white only have a estimated increase of 0.58 units in Total health expenditure, keeping other variables constant.
+
+Similarly,  In comparison with other categories individuals who identify as non Hispanic black only have a estimated increase of 0.24 units in Total health expenditure, keeping other variables constant.
+
+Mental Health: The coefficients of all the categories are statistically significant. With very good as 0.10, good as 0.32, fair as 0.86 and poor as 1.29 units respectively in Total health expenditure.
+
+
+(ii). Interpretation of the Intercept term
+
+
+The intercept (5.3452) represents the estimated Total health expenditure for a reference category. So, it represents the estimated Total health expenditure for a male individual with BMI category as Normal with race as HISPANIC and Mental health as EXCELLENT.
+
+
+(iii). Model Fit
+
+Residuals: The residual is the difference between observed and predicted values, it has a range of -7.0893 to 6.0963. Showing that model does not explain all the variance in the data, but it is giving estimate with some degree of accuracy.
+
+R-Squared:  The value of R-Squared is 0.1876. So, the model explains about 18.76% of variance in the Total health expenditure.
+
+F-Statistic: The value is smaller than 0.05, indicating the model as a whole is statistically significant.
+
+
+
+
+
+```{r}
+
+# PART C
+
+
+plot(model)
+
+hist(residuals(model), main = "Residuals Histogram")
+
+```
+
+As, in the scatter plot of Residuals vs Fiited values, we observe that the residuals are spread and randomly distrubted and there is no consistent pattern in them. We can say that model appears to be a decent fit.
+
+As, in the qqplot of Residuals, we observe that the residuals are almost following a straight diagonal line, indicating that the residuals are approximately normally distributed. This supports the assumption that the model will be able to capture the underlying relationships in the data.
+
+
+
+
+# Question 5
+
+```{r}
+#PART A
+
+
+splitting_data <- sample(c(TRUE, FALSE), nrow(df3), replace=TRUE, prob=c(0.9,0.1))
+train  <- df3[splitting_data, ]
+test   <- df3[!splitting_data, ]
+
+head(train)
+head(test)
+```
+
+
+```{r}
+#PART B
+
+model_1 <- lm( Transformed_TotalHealthExpenditure ~ Age + Sex + BMI_Categorical + RaceEthnicity + MentalHealth, data = train)
+
+
+Predict_model_1 <- predict(model_1, newdata = train)
+error <- (df3$Transformed_TotalHealthExpenditure - Predict_model_1)^2
+mse <- mean(error)
+mse
+
+model_2 <- lm( TotalHealthExpenditure ~ Age + Sex + BMI_Categorical + RaceEthnicity + MentalHealth, data = train)
+
+
+```
+
+```{r}
+#PART C
+
+dfx <- data.frame(
+  Age = c(60, 60),
+  Sex = c("FEMALE", "MALE"),
+  BMI_Categorical = c("Overweight", "Overweight"),
+  RaceEthnicity = c("HISPANIC", "HISPANIC"),
+  MentalHealth = c("VERY GOOD", "VERY GOOD")
+)
+
+predict_2 <- predict(model_2, newdata = dfx, interval = "confidence")
+print(predict_2)
+
+
+```
+
+For Person 1, the estimated average Total health expenditure is approximately $7,500 approximately, within the 95% confidence interval.
+
+For Person 2, the estimated average Total health expenditure is approximately $6,900 approximately, within the 95% confidence interval.
+
+
+```{r}
+#PART D
+
+predicted_values <- predict(model_1, newdata = test)
+
+mse <- mean((test$Transformed_TotalHealthExpenditure - predicted_values)^2)
+
+cat("Mean Squared Error (MSE):", mse, "\n")
+
+
+```
+
+The mean squared error of the testing dataset is less than the earlier model
+
+
+
+```{r}
+# PART E
+```
+
+
+Calculating the MSE on the testing dataset is considered superior to calculating the MSE on the training dataset when evaluating predictive performance of competing models because testing data is independent and unseen for the model.
+
+When we make a new predictive model the end goal for us is that model performs well with the new data and unseen data. Test data gives us this opportunity to test the model. It also helps us avoid overfitting if the model is performing good on train data but not on test data. When we are comparing multiple models testing data help us validate which model is performing better.
+
+
+
+
+
+
+
+
+
+#                                                   END
+# -------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+# This is starting of Assignment 4 - PART B 
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lmtest)
+library(corrplot)
+library(rpart)
+library(vcd)
+library(tidyverse)
+library(moments)
+library(pROC)
+
+
+df <- read.csv("D:/Ivey/Stats/mepsData_with0.csv")
+
+dim(df)
+head(df)
+
+
+```
+
+# Question 1
+
+```{r}
+
+subset_df <- df[df$Age > 18 & df$FluVaccination %in% c(0, 1), ]
+
+dim(df)
+head(subset_df)
+
+```
+
+# Question 2
+
+```{r}
+
+table(subset_df$FluVaccination, subset_df$HaveProvider)
+table(subset_df$FluVaccination, subset_df$HealthInsurance)
+table(subset_df$FluVaccination, subset_df$HealthStatus)
+table(subset_df$FluVaccination, subset_df$FamIncome_Categorical)
+
+
+```
+
+# Question 3
+
+```{r}
+
+subset_df1 <- na.omit(subset_df[, c("Age", "Sex", "RaceEthnicity", "HealthInsurance", "FamIncome_Continuous", "FluVaccination")])
+
+dim(subset_df1)
+head(subset_df1)
+
+
+Lmodel <- glm(FluVaccination ~ Age + Sex + RaceEthnicity + HealthInsurance + FamIncome_Continuous, data = subset_df1, family = binomial)
+Result <- summary(Lmodel)
+Result
+
+coefficient_estimates <- Result$coefficients[,1]
+coefficient_std_error <- Result$coefficients[,2]
+
+odds_ratios <- exp(coefficient_estimates)
+confidence_int <- exp(cbind(coefficient_estimates - 1.96* coefficient_std_error, coefficient_estimates + 1.96* coefficient_std_error))
+
+odds_ratios
+confidence_int
+
+```
+
+Age: For each unit increase in Age variable, the log odds of obtaining a flu vaccination increases by 0.0381. This means older individuals are more likely to get flu vaccination.
+
+Sex: Females are associated with lower log odds of obtaining a flu vaccine by 0.2807 compared to males.
+
+Health Insurance: Having a health insurance means lower log odds of obtaining a flu vaccine by 0.3714 compared to not having a health insurance.
+
+FamIncome: For each unit increase in the FamIncome variable, the log odds of obtaining a flu vaccination increases by 0.00000285.
+
+All of the predictor variables are significant as they have p value smaller than 0.05.
+
+#odds ratio & confidence intervals:
+
+Age: The confidence interval is between 1.0369 and 1.0407. Which does not include 1 in it, indicating that odds ratio is significant. Age variable has a significant impact on obtaining a flu vaccine.
+
+Sex: The confidence interval is between 0.7099 and 0.8034. Which does not include 1 in it, indicating that odds ratio is significant. Sex variable has a significant impact on obtaining a flu vaccine.
+
+HealthInsurance: The confidence interval is between 0.6536 and 0.7280. Which does not include 1 in it, indicating that odds ratio is significant. HealthInsurance variable has a significant impact on obtaining a flu vaccine.
+
+FamIncome: The confidence interval is between 1.0000024 and 1.0000033. Which does not include 1 in it, indicating that odds ratio is significant. FamIncome variable has a significant impact on obtaining a flu vaccine.
+
+
+```{r}
+subset_dfx <- na.omit(subset_df)
+#subset_dfx <- subset_df
+
+All_parameter_model <- glm(FluVaccination ~ Age + Sex + RaceEthnicity + HealthInsurance + FamIncome_Continuous + NotAffordHealthCare + MentalHealth + HaveProvider + CensusRegion + TotalHealthExpenditure + HasHypertension + HasDiabetes + BMI + Drinks5Day, data = subset_dfx, family = binomial)
+
+
+##########
+
+best_model <- step(All_parameter_model, direction = "backward")
+best_model
+
+
+```
+
+I have used a step wise backward selection process to compute a better model than the original model.
+
+The parameters used in the original model are : Age, Sex, RaceEthnicity, HealthInsurance, FamIncome_Continuous.
+
+AIC for this model is 23481.
+
+The parameters used in the improved model are: Age, RaceEthnicity, HealthInsurance, FamIncome_Continuous, NotAffordHealthCare,
+                                              MentalHealth, HaveProvider, TotalHealthExpenditure, HasHypertension, HasDiabetes.
+
+AIC for this model is 9126.
+
+AIC can be used to access which model is performing better. It is a measure of the trade-off between model fit and model complexity.
+
+AIC considers how well the model fits the dataset. Which basically explains how well the model explains the variation in the data.
+Models with a better fit have a lower AIC.
+
+Also, AIC penalizes the complex models, which have more number of parameters in the model.  
+
+Since a lower AIC indicates a better model, Improved model with AIC of 9126 is better than the original model with AIC of 23481.
+
+
+# Question 4
+
+```{r}
+
+dfx <- data.frame(
+  Age = c(60, 60, 60, 60),
+  Sex = c(0, 1, 0, 1),
+  RaceEthnicity = c(1,1,1,1),
+  HealthInsurance = c(1, 1, 3, 3),
+  FamIncome_Continuous = c(70000,70000 , 70000,70000 )
+)
+
+
+predict_Lmodel <- predict(Lmodel, newdata = dfx, type = "response", se.fit = TRUE)
+
+predicted_probabilities <- predict_Lmodel$fit
+lower <- predict_Lmodel$fit - 1.96 * predict_Lmodel$se.fit
+upper <- predict_Lmodel$fit + 1.96 * predict_Lmodel$se.fit
+
+
+
+result_df <- data.frame(
+  Person = 1:4,
+  Predicted_Probability = predicted_probabilities,
+  Lower_Interval = lower,
+  Upper_Interval = upper
+)
+
+result_df
+
+```
+
+Person 1: Perdicited Proability is 0.5749, 95% Confidence interval is between 0.5589 and 0.5909.
+The model estimates that Person 1 has a predicted probability of 57.50% of obtaining a flu vaccine.
+
+Person 2: Perdicited Proability is 0.5053, 95% Confidence interval is between 0.4884 and 0.5222.
+The model estimates that Person 2 has a predicted probability of 50.54% of obtaining a flu vaccine.
+
+Person 3: Perdicited Proability is 0.3916, 95% Confidence interval is between 0.3677 and 0.4154.
+The model estimates that Person 1 has a predicted probability of 39.16% of obtaining a flu vaccine.
+
+Person 4: Perdicited Proability is 0.3271, 95% Confidence interval is between 0.3047 and 0.3494.
+The model estimates that Person 1 has a predicted probability of 32.71% of obtaining a flu vaccine.
+
+
+
+
+# Question 5
+
+```{r}
+
+predict_Lmodel_1 <- predict(Lmodel, newdata = subset_df1, type = "response")
+
+
+prediction_threshold <- 0.5
+
+predicted_classifications <- ifelse(predict_Lmodel_1 >= prediction_threshold, 1, 0)
+
+actual_vaccination_status <- subset_df1$FluVaccination
+
+accuracy_of_model <- mean(predicted_classifications == actual_vaccination_status)
+
+true_positives <- sum(predicted_classifications == 1 & actual_vaccination_status == 1)
+false_negatives <- sum(predicted_classifications == 0 & actual_vaccination_status == 1)
+True_Positive_Ratio <- true_positives / (true_positives + false_negatives)
+
+true_negatives <- sum(predicted_classifications == 0 & actual_vaccination_status == 0)
+false_positives <- sum(predicted_classifications == 1 & actual_vaccination_status == 0)
+True_Negatives_Ratio <- true_negatives / (true_negatives + false_positives)
+
+cat("Prediction Accuracy:", accuracy_of_model, "\n")
+cat("True Positive Ratio:", True_Positive_Ratio, "\n")
+cat("True Negative Ratio:", True_Negatives_Ratio, "\n")
+
+
+```
+
+As, we can see from the model output. True Negative percentage is 73.67%. So the model appears to be better at predicting individuals who will not get a flu vaccine compared to those who will get a flu vaccine.
+
+
+
+# Question 6
+
+
+
+```{r}
+
+roc_original <- roc(subset_df1$FluVaccination, predict(Lmodel, type = "response"))
+
+plot(roc_original, col = "red", print.auc = TRUE, print.auc.y = 0.2)
+
+
+```
+
+```{r}
+
+roc_improved <- roc(subset_dfx$FluVaccination, predict(best_model, type = "response"))
+
+plot(roc_improved, col = "green", print.auc = TRUE, print.auc.y = 0.2)
+
+
+```
+
+The ROC curve and AUC score can be used to visually and quantitatively compare the performance of different models. A model with higher AUC score and a ROC curve closer or "bowed" towards the top left corner is considered better.
+
+The AUC score quantifies the ability of a model to distinguish between different distinct categories.
+
+The original model had a AUC score of 0.701 and the improved model has a AUC score of 0.749.
+
+The improved model is better at classifying the different categories as it has a higher AUC score, then the original model.
+
+
+
+
+
+
+
+
